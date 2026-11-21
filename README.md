@@ -11,10 +11,27 @@ Yapay zekâ ile sanal influencer karakterleri oluştur, onların ağzından içe
 | Tanıtım sitesi | `/`, `/k/luna` | Karakter vitrini ve her karakterin herkese açık profil sayfası |
 | Panel | `/panel` | Karakter listesi, yeni karakter, karakter ayarları |
 | İçerik stüdyosu | `/panel/karakter/[id]` | Fikir üret → caption yaz → görsel üret → planla / paylaş |
+| Yüz tutarlılığı | `/panel/karakter/[id]/yuz` | Referans fotoğraf, eğitim seti üretimi ve LoRA eğitimi |
 | Takvim | `/panel/takvim` | Aylık takvim, planlananlar, taslaklar ve hatalılar |
 | Otomasyon | `/api/cron/publish` | Zamanı gelen gönderileri Instagram'a paylaşır |
 
-**Karakter tutarlılığı:** Her karakterin *kişilik/ton*, *yazım kuralları* (ör. "Öpüyorum! 💋" imzası) ve *görünüş tarifi* alanları var. Metin üretimi ilk ikisini, görsel üretimi de görünüş tarifini her istekte kullanır.
+**Karakter tutarlılığı:** Her karakterin *kişilik/ton*, *yazım kuralları* (ör. "Öpüyorum! 💋" imzası) ve *görünüş tarifi* alanları var. Metin üretiminde ilk ikisi her istekte kullanılır.
+
+## Yüz tutarlılığı (aynı kız, her fotoğrafta)
+
+Görseller üç yöntemden biriyle üretilir. Uygulama mevcut en iyi yöntemi otomatik seçer, stüdyoda elle de değiştirilebilir:
+
+| Yöntem | Ne zaman | Tutarlılık | Maliyet (yaklaşık) |
+|---|---|---|---|
+| **LoRA** | Karakter için model eğitildiyse | En yüksek | ~0,03 $/görsel |
+| **Referans (FLUX Kontext)** | Referans fotoğraf veya avatar varsa | Yüksek, tek fotoğraf yeter | ~0,04 $/görsel |
+| **Sadece tarif** (FLUX 1.1 Pro) | Hiç fotoğraf yoksa | Düşük | ~0,04 $/görsel |
+
+**LoRA eğitimi adımları** (`Panel → Karakter → Yüz tutarlılığı`):
+1. **Varyasyon üret:** Kontext, referans fotoğraftan 20 hazır sahnede (yakın çekim, profil, kafe, sokak, gece, plaj…) yeni fotoğraflar üretir.
+2. **Seç:** Yüzü farklı çıkanların seçimini kaldır veya sil. En az 10, ideal 15-18 görsel. İstersen beğendiğin bir görseli "Referans" yap.
+3. **LoRA eğitimini başlat:** Görseller açıklamalarıyla birlikte zip'lenip Replicate'e yüklenir. Hesabında `<karakter>-lora` adında özel bir model oluşturulur ve `ostris/flux-dev-lora-trainer` ile eğitim başlar (~20-30 dk, ~2-3 $).
+4. Eğitimin durumu "Durumu yenile" düğmesiyle ya da cron uç noktasıyla otomatik güncellenir. Bitince karakterin tüm yeni görselleri LoRA ile üretilir. Tetikleyici kelime otomatik atanır (ör. `LUNATOK`).
 
 ## Teknoloji
 
@@ -45,6 +62,7 @@ Yerelde `ADMIN_PASSWORD` boşsa panel parolasız açılır. Canlıda parola **zo
 | `ADMIN_PASSWORD` | Panel giriş parolası |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Metin üretimi |
 | `REPLICATE_API_TOKEN`, `REPLICATE_IMAGE_MODEL` | Görsel üretimi |
+| `REPLICATE_KONTEXT_MODEL`, `REPLICATE_TRAINER` | Referanslı üretim ve LoRA eğitimi modelleri (varsayılanlar yeterli) |
 | `INSTAGRAM_ACCESS_TOKEN` | Instagram paylaşımı (karakter ayarlarına Instagram kullanıcı ID'si de girilmeli) |
 | `PUBLIC_BASE_URL` | Sitenin canlı adresi; Instagram görselleri bu adresten çeker |
 | `CRON_SECRET` | `/api/cron/publish` uç noktasını korur |
@@ -52,7 +70,7 @@ Yerelde `ADMIN_PASSWORD` boşsa panel parolasız açılır. Canlıda parola **zo
 
 ## Otomatik paylaşım
 
-Planlanan gönderiler, `/api/cron/publish` çağrıldığında paylaşılır. Bu adresi 5-10 dakikada bir çağıran bir zamanlayıcı kur, örneğin [cron-job.org](https://cron-job.org) veya sunucuda crontab:
+Planlanan gönderiler `/api/cron/publish` çağrıldığında paylaşılır. Aynı çağrı devam eden LoRA eğitimlerinin durumunu da günceller. Bu adresi 5-10 dakikada bir çağıran bir zamanlayıcı kur, örneğin [cron-job.org](https://cron-job.org) veya sunucuda crontab:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" https://SITEN/api/cron/publish
@@ -71,7 +89,7 @@ Instagram için gerekenler:
 ## Yol haritası
 
 - [ ] Görseller için kalıcı depolama (R2 / Supabase Storage)
-- [ ] Referans fotoğrafla yüz tutarlılığı (ör. FLUX + LoRA / PuLID)
+- [x] Referans fotoğrafla yüz tutarlılığı (FLUX Kontext) ve LoRA eğitimi
 - [ ] Reels / video üretimi
 - [ ] TikTok paylaşımı
 - [ ] Yorumlara karakter ağzından AI yanıt

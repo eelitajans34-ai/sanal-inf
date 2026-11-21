@@ -20,8 +20,27 @@ export const characters = sqliteTable("characters", {
   avatarUrl: text("avatar_url").notNull().default(""),
   language: text("language").notNull().default("tr"),
   instagramUserId: text("instagram_user_id").notNull().default(""),
+  // Yüz tutarlılığı: referans fotoğraf (Kontext) ve eğitilmiş LoRA modeli
+  referenceImageUrl: text("reference_image_url").notNull().default(""),
+  loraTrigger: text("lora_trigger").notNull().default(""),
+  loraVersion: text("lora_version").notNull().default(""), // owner/model:versionid
+  trainingId: text("training_id").notNull().default(""),
+  trainingStatus: text("training_status").notNull().default(""), // starting|processing|succeeded|failed|canceled
+  trainingError: text("training_error").notNull().default(""),
   createdAt: ts("created_at").notNull().default(now()),
   updatedAt: ts("updated_at").notNull().default(now()).$onUpdate(() => new Date()),
+});
+
+/** LoRA eğitim seti için üretilen aday görseller */
+export const trainingImages = sqliteTable("training_images", {
+  id: id(),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url").notNull(),
+  scene: text("scene").notNull().default(""),
+  selected: integer("selected", { mode: "boolean" }).notNull().default(true),
+  createdAt: ts("created_at").notNull().default(now()),
 });
 
 export type PostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED";
@@ -50,10 +69,17 @@ export const posts = sqliteTable(
   (t) => [index("posts_status_scheduled_idx").on(t.status, t.scheduledAt)]
 );
 
-export const charactersRelations = relations(characters, ({ many }) => ({ posts: many(posts) }));
+export const charactersRelations = relations(characters, ({ many }) => ({
+  posts: many(posts),
+  trainingImages: many(trainingImages),
+}));
+export const trainingImagesRelations = relations(trainingImages, ({ one }) => ({
+  character: one(characters, { fields: [trainingImages.characterId], references: [characters.id] }),
+}));
 export const postsRelations = relations(posts, ({ one }) => ({
   character: one(characters, { fields: [posts.characterId], references: [characters.id] }),
 }));
 
 export type Character = typeof characters.$inferSelect;
 export type Post = typeof posts.$inferSelect;
+export type TrainingImage = typeof trainingImages.$inferSelect;

@@ -7,6 +7,7 @@ import { toLocalInput } from "@/lib/format";
 import CharacterForm from "@/components/CharacterForm";
 import ContentStudio from "@/components/ContentStudio";
 import PostRow from "@/components/PostRow";
+import { IMAGE_MODE_LABEL, imageMode, type ImageMode } from "@/lib/ai/image";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,12 @@ export default async function CharacterDetail({ params }: { params: Promise<{ id
     with: { posts: { orderBy: desc(schema.posts.createdAt), limit: 50 } },
   });
   if (!c) notFound();
+
+  const availableModes: ImageMode[] = [
+    ...(c.loraVersion ? (["lora"] as const) : []),
+    ...(c.referenceImageUrl || c.avatarUrl ? (["reference"] as const) : []),
+    "text",
+  ];
 
   // Varsayılan paylaşım zamanı: yarın 19:00 (İstanbul)
   const tomorrow = toLocalInput(new Date(Date.now() + 24 * 60 * 60 * 1000)).slice(0, 10);
@@ -36,12 +43,22 @@ export default async function CharacterDetail({ params }: { params: Promise<{ id
             {c.handle} · {c.niche}
           </p>
         </div>
-        <Link href={`/k/${c.slug}`} className="btn-ghost ml-auto" target="_blank">
-          Tanıtım sayfası ↗
-        </Link>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Link href={`/panel/karakter/${c.id}/yuz`} className="btn-ghost">
+            Yüz tutarlılığı · {IMAGE_MODE_LABEL[imageMode(c)]}
+          </Link>
+          <Link href={`/k/${c.slug}`} className="btn-ghost" target="_blank">
+            Tanıtım sayfası ↗
+          </Link>
+        </div>
       </header>
 
-      <ContentStudio characterId={c.id} defaultTime={`${tomorrow}T19:00`} />
+      <ContentStudio
+        characterId={c.id}
+        defaultTime={`${tomorrow}T19:00`}
+        modes={availableModes.map((m) => ({ value: m, label: IMAGE_MODE_LABEL[m] }))}
+        defaultMode={imageMode(c)}
+      />
 
       <section>
         <h2 className="mb-4 font-display text-2xl">Gönderiler</h2>

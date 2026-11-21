@@ -18,10 +18,15 @@ async function api<T>(path: string, body: object): Promise<T> {
 export default function ContentStudio({
   characterId,
   defaultTime,
+  modes,
+  defaultMode,
 }: {
   characterId: string;
   defaultTime: string;
+  modes: { value: string; label: string }[];
+  defaultMode: string;
 }) {
+  const [mode, setMode] = useState(defaultMode);
   const router = useRouter();
   const [theme, setTheme] = useState("");
   const [ideas, setIdeas] = useState<string[]>([]);
@@ -71,6 +76,7 @@ export default function ContentStudio({
       const r = await api<{ imageUrl: string }>("/api/ai/image", {
         characterId,
         scene: imagePrompt || idea,
+        mode,
       });
       setImageUrl(r.imageUrl);
     });
@@ -184,6 +190,18 @@ export default function ContentStudio({
               placeholder="Sahne tarifi (İngilizce daha iyi sonuç verir). Karakterin görünüşü otomatik eklenir."
             />
             <div className="mt-2 flex gap-2">
+              <select
+                className="input w-auto"
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+                title="Görsel üretim yöntemi"
+              >
+                {modes.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
               <button
                 className="btn-ghost"
                 onClick={makeImage}

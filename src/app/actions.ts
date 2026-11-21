@@ -10,6 +10,7 @@ import { db, schema } from "@/lib/db";
 const { characters, posts } = schema;
 import { AUTH_COOKIE, authToken, isValidToken } from "@/lib/auth";
 import { publishPost } from "@/lib/publish/run";
+import { refreshTraining, startTraining } from "@/lib/ai/training";
 
 async function requireAuth() {
   const jar = await cookies();
@@ -87,6 +88,7 @@ export async function updateCharacter(id: string, formData: FormData) {
 export async function deleteCharacter(id: string) {
   await requireAuth();
   await db.delete(posts).where(eq(posts.characterId, id));
+  await db.delete(schema.trainingImages).where(eq(schema.trainingImages.characterId, id));
   await db.delete(characters).where(eq(characters.id, id));
   redirect("/panel");
 }
@@ -150,4 +152,69 @@ export async function deletePost(id: string) {
   await requireAuth();
   await db.delete(posts).where(eq(posts.id, id));
   revalidatePath("/panel", "layout");
+}
+
+// ---------- Yüz tutarlılığı / LoRA ----------
+
+async function getCharacter(id: string) {
+  const c = await db.query.characters.findFirst({ where: eq(characters.id, id) });
+  if (!c) throw new Error("Karakter bulunamadı");
+  return c;
+}
+
+const facePath = (id: string) => `/panel/karakter/${id}/yuz`;
+
+export async function toggleTrainingImage(characterId: string, imageId: string, selected: boolean) {
+  await requireAuth();
+  await db
+    .update(schema.trainingImages)
+    .set({ selected })
+    .where(eq(schema.trainingImages.id, imageId));
+  revalidatePath(facePath(characterId));
+}
+
+export async function deleteTrainingImage(characterId: string, imageId: string) {
+  await requireAuth();
+  await db.delete(schema.trainingImages).where(eq(schema.trainingImages.id, imageId));
+  revalidatePath(facePath(characterId));
+}
+
+export async function setReferenceImage(characterId: string, imageUrl: string) {
+  await requireAuth();
+  await db.update(characters).set({ referenceImageUrl: imageUrl }).where(eq(characters.id, characterId));
+  revalidatePath(facePath(characterId));
+}
+
+export type TrainingActionState = { error?: string; ok?: string } | null;
+
+export async function startTrainingAction(
+  characterId: string,
+  _prev: TrainingActionState,
+  _formData: FormData
+): Promise<TrainingActionState> {
+  void _prev;
+  void _formData;
+  await requireAuth();
+  try {
+    await startTraining(await getCharacter(characterId));
+    revalidatePath(facePath(characterId));
+    return { ok: "Eğitim başladı. Genellikle 20-30 dakika sürer." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function refreshTrainingAction(characterId: string) {
+  await requireAuth();
+  await refreshTraining(await getCharacter(characterId));
+  revalidatePath(facePath(characterId));
+}
+
+export async function removeLora(characterId: string) {
+  await requireAuth();
+  await db
+    .update(characters)
+    .set({ loraVersion: "", trainingId: "", trainingStatus: "", trainingError: "" })
+    .where(eq(characters.id, characterId));
+  revalidatePath(facePath(characterId));
 }
