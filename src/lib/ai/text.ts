@@ -19,28 +19,44 @@ Karakter:
 Her zaman karakterin sesini koru. Yalnızca istenen formatta yanıt ver.`;
 }
 
-async function ask(c: Character, prompt: string, maxTokens = 1200) {
+// Model yanıttan önce kısa bir düşünme adımı yapabildiği için token sınırı geniş tutulur.
+const MIN_TOKENS = 4000;
+
+async function ask(c: Character, prompt: string, maxTokens = MIN_TOKENS) {
   const client = new Anthropic();
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: maxTokens,
-    system: systemPrompt(c),
-    messages: [{ role: "user", content: prompt }],
-  });
-  return res.content
-    .map((b) => (b.type === "text" ? b.text : ""))
-    .join("")
-    .trim();
+  let limit = Math.max(maxTokens, MIN_TOKENS);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: limit,
+      system: systemPrompt(c),
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = res.content
+      .map((b) => (b.type === "text" ? b.text : ""))
+      .join("")
+      .trim();
+    // Yanıt yarıda kesildiyse daha geniş sınırla bir kez daha dene
+    if (res.stop_reason !== "max_tokens" || attempt === 1) return text;
+    limit *= 2;
+  }
+  return "";
 }
 
 function parseJson<T>(raw: string): T {
-  const start = raw.search(/[[{]/);
-  const end = Math.max(raw.lastIndexOf("]"), raw.lastIndexOf("}"));
-  return JSON.parse(raw.slice(start, end + 1)) as T;
+  const cleaned = raw.replace(/```(?:json)?/gi, "");
+  const start = cleaned.search(/[[{]/);
+  const end = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
+  if (start < 0 || end <= start) throw new Error("AI yanıtı okunamadı, tekrar dene");
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1)) as T;
+  } catch {
+    throw new Error("AI yanıtı okunamadı, tekrar dene");
+  }
 }
 
 /** Karakterin sesiyle JSON yanıt ister. */
-export async function askJson<T>(c: Character, prompt: string, maxTokens = 1500): Promise<T> {
+export async function askJson<T>(c: Character, prompt: string, maxTokens = MIN_TOKENS): Promise<T> {
   return parseJson<T>(await ask(c, prompt, maxTokens));
 }
 
