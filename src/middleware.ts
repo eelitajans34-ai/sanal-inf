@@ -14,5 +14,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/panel/:path*", "/api/ai/:path*", "/api/video/:path*"],
+  matcher: ["/panel/:path*", "/api/ai/:path*", "/api/video/:path*", "/api/settings/:path*"],
 };

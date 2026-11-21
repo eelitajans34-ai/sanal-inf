@@ -80,21 +80,45 @@ Video üretimi asenkron çalışır: klipler Replicate'te başlatılır, panel a
 
 API anahtarları yoksa uygulama **demo modunda** çalışır: örnek metin ve yer tutucu görsel üretir, paylaşımları gerçekten göndermeden "paylaşıldı" olarak işaretler.
 
-## Kurulum
+## Kurulum (5 dakika)
 
 ```bash
+git clone https://github.com/eelitajans34-ai/sanal-inf.git
+cd sanal-inf
 npm install
-cp .env.example .env      # anahtarları doldur (boş bırakırsan demo modu)
-npm run setup             # veritabanı tablolarını oluşturur ve Luna'yı ekler
-npm run dev               # http://localhost:3000
+cp .env.example .env      # ADMIN_PASSWORD'u doldur (diğerleri panelden de girilebilir)
+npm run setup             # veritabanı + Luna + 52 sahne şablonu + LoRA eğitim seti
+npm run dev               # http://localhost:3000/panel
 ```
 
-Yerelde `ADMIN_PASSWORD` boşsa panel parolasız açılır. Canlıda parola **zorunludur**; tanımlı değilse panel kilitli kalır.
+Sonra panelde sırayla:
+
+1. **Kurulum** sayfası: Claude ve Replicate anahtarlarını yapıştır, "Bağlantıyı test et" ile doğrula. Her servis için anahtarın nereden alınacağı adım adım yazıyor. Instagram isteğe bağlı.
+2. **Luna → Ses ve hareket:** sesi seç, birkaç hareketi hazır fotoğraflarla dene ve puanla.
+3. **Luna → Yüz tutarlılığı:** hazır 24 fotoğraflık setle LoRA eğitimini başlat (~20-30 dk). İsteğe bağlı ama önerilir.
+4. **Luna → Günlük işler:** "Örnek planı ekle" ya da kendi işlerini tanımla. Bundan sonra uygulama açık olduğu sürece içerikler kendiliğinden üretilir.
+
+Yerelde `ADMIN_PASSWORD` boşsa panel parolasız açılır. Canlıda parola **zorunludur**.
+
+## Günlük işler ve arka plan işçisi
+
+Panelden tanımlanan her iş için **gün(ler)**, **üretim saati**, **iş türü**, **konu listesi** (her çalışmada sıradaki konu, boşsa AI seçer) ve **paylaşım şekli** belirlenir:
+
+| İş türü | Ne üretir | Gerekenler |
+|---|---|---|
+| Fotoğraflı gönderi | Fikir + gönderi metni + görsel (Replicate yoksa hazır fotoğraflardan biri) | Claude |
+| Fotoğraf montajı | Hazır fotoğraflardan hareketli, yazılı 9:16 Reels (~15 sn'de hazır) | Claude (yoksa örnek metin) |
+| Konuşan AI Reels | Senaryo + Luna'nın sesi ve konuşan/hareket eden klipleri + altyazılı video | Claude + Replicate |
+
+Paylaşım: **"Onayıma düşsün"** seçilirse içerik takvimde taslak olarak bekler. **"Otomatik planla"** seçilirse belirtilen saatte Instagram'a gönderilir (saat geçmişse ertesi gün).
+
+**Arka plan işçisi** (`src/lib/worker.ts`) uygulama çalıştığı sürece her dakika şunları yapar: video kliplerini ilerletir, hazır Reels'leri birleştirir, günlük işlerden gelen videolardan gönderi oluşturur, zamanı gelen gönderileri paylaşır, LoRA eğitimlerini yoklar ve zamanı gelen günlük işleri çalıştırır. Sunucusuz bir ortamda (ör. Vercel) aynı işi `GET /api/cron/tick` adresini dakikada bir çağırarak yaptırabilirsin (`Authorization: Bearer $CRON_SECRET`).
 
 ## Ortam değişkenleri
 
 | Değişken | Ne işe yarar |
 |---|---|
+| *(panelden)* | Claude, Replicate, Instagram anahtarları ve herkese açık adres **Kurulum** sayfasından girilebilir; panel değerleri .env'in önüne geçer |
 | `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Yerelde `file:./data.db`, canlıda Turso adresi ve token |
 | `ADMIN_PASSWORD` | Panel giriş parolası |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Metin üretimi |
@@ -102,21 +126,17 @@ Yerelde `ADMIN_PASSWORD` boşsa panel parolasız açılır. Canlıda parola **zo
 | `REPLICATE_KONTEXT_MODEL`, `REPLICATE_TRAINER` | Referanslı üretim ve LoRA eğitimi modelleri (varsayılanlar yeterli) |
 | `INSTAGRAM_ACCESS_TOKEN` | Instagram paylaşımı (karakter ayarlarına Instagram kullanıcı ID'si de girilmeli) |
 | `PUBLIC_BASE_URL` | Sitenin canlı adresi; Instagram görselleri bu adresten çeker |
-| `CRON_SECRET` | `/api/cron/publish` uç noktasını korur |
+| `CRON_SECRET` | `/api/cron/tick` uç noktasını korur |
+| `WORKER`, `WORKER_INTERVAL_MS` | Arka plan işçisi (`off` ile kapatılır), çalışma aralığı |
 | `MEDIA_DIR` | Üretilen görsellerin saklandığı klasör |
 
-## Otomatik paylaşım
+## Otomatik paylaşım (Instagram)
 
-Planlanan gönderiler `/api/cron/publish` çağrıldığında paylaşılır. Aynı çağrı devam eden LoRA eğitimlerinin durumunu da günceller. Bu adresi 5-10 dakikada bir çağıran bir zamanlayıcı kur, örneğin [cron-job.org](https://cron-job.org) veya sunucuda crontab:
-
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://SITEN/api/cron/publish
-```
-
-Instagram için gerekenler:
+Planlanan gönderiler arka plan işçisi tarafından zamanı gelince paylaşılır. Instagram için gerekenler (Kurulum sayfasında adım adım anlatılıyor):
 1. Instagram hesabı **Business** veya **Creator** olmalı ve bir Facebook sayfasına bağlı olmalı.
 2. Meta for Developers'ta bir uygulama oluştur, `instagram_content_publish` izniyle uzun ömürlü bir access token al.
-3. Token'ı `INSTAGRAM_ACCESS_TOKEN`, hesabın Instagram kullanıcı ID'sini de karakter ayarlarına gir.
+3. Token'ı Kurulum sayfasına yapıştır, "Bağlantıyı test et" ile bulunan Instagram hesabını tek tıkla karaktere bağla.
+4. Instagram medyayı herkese açık bir adresten indirir: site yayında değilken `npx cloudflared tunnel --url http://localhost:3000` ile geçici bir adres alıp **Herkese açık adres** alanına yaz.
 
 ## Yayına alma notları
 
@@ -128,7 +148,11 @@ Instagram için gerekenler:
 - [ ] Görseller için kalıcı depolama (R2 / Supabase Storage)
 - [x] Referans fotoğrafla yüz tutarlılığı (FLUX Kontext) ve LoRA eğitimi
 - [x] Konuşan karakter, hareket kütüphanesi ve Reels üretimi
+- [x] Kurulum sihirbazı (panelden anahtar bağlama ve test)
+- [x] Fotoğraf montajı (Replicate'siz hareketli Reels)
+- [x] Günlük işler ve arka plan işçisi
 - [ ] Arka plan müziği
+- [ ] Siteyi yayına alma (sunucu, kalıcı medya deposu)
 - [ ] Ses klonlama arayüzü
 - [ ] TikTok paylaşımı
 - [ ] Yorumlara karakter ağzından AI yanıt

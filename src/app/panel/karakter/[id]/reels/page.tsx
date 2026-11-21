@@ -8,7 +8,7 @@ import { PRESETS, presetById } from "@/lib/video/presets";
 import { engineById } from "@/lib/video/engines";
 import { reelClips } from "@/lib/video/reels";
 import { toLocalInput } from "@/lib/format";
-import { ClipPoller, ReelBuilder } from "@/components/VideoClient";
+import { ClipPoller, MontageBuilder, ReelBuilder } from "@/components/VideoClient";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +59,8 @@ export default async function ReelsPage({ params }: { params: Promise<{ id: stri
         </p>
       </div>
 
+      <MontageBuilder characterId={c.id} photos={templates.filter((t) => t.source === "photo")} />
+
       <ReelBuilder
         characterId={c.id}
         presets={PRESETS.map(({ id, label, category, kind }) => ({ id, label, category, kind }))}
@@ -72,6 +74,7 @@ export default async function ReelsPage({ params }: { params: Promise<{ id: stri
           <section key={reel.id} className="card p-6">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="font-display text-2xl">{reel.title}</h2>
+              <span className="badge bg-gray-100 text-gray-700">{reel.kind === "montage" ? "Fotoğraf montajı" : "AI video"}</span>
               <span className={`badge ${st.cls}`}>{st.label}</span>
               <form action={deleteReelAction.bind(null, c.id, reel.id)} className="ml-auto">
                 <button className="btn-danger px-3 py-1 text-xs">Sil</button>
@@ -111,6 +114,17 @@ export default async function ReelsPage({ params }: { params: Promise<{ id: stri
                   <p className="text-sm">
                     <b>Hook:</b> {reel.hook}
                   </p>
+                )}
+                {reel.kind === "montage" && (
+                  <div className="flex gap-2 overflow-x-auto">
+                    {reel.slides.map((sl, i) => (
+                      <figure key={i} className="w-20 shrink-0 text-center text-[10px]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={sl.imageUrl} alt="" className="aspect-[9/16] w-full rounded-lg object-cover" />
+                        <figcaption className="mt-1 line-clamp-2">{sl.text}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
                 )}
                 <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {clips.map((clip) => (

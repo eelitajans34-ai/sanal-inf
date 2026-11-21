@@ -1,4 +1,5 @@
 import type { Character, Post } from "@/db/schema";
+import { setting } from "@/lib/config";
 
 // Instagram Graph API (Business/Creator hesap gerekir).
 // Gerekli: INSTAGRAM_ACCESS_TOKEN ve karakterin instagramUserId alanı.
@@ -11,7 +12,7 @@ export async function publishToInstagram(
   post: Post,
   character: Character
 ): Promise<PublishResult> {
-  const token = process.env.INSTAGRAM_ACCESS_TOKEN;
+  const token = setting("INSTAGRAM_ACCESS_TOKEN");
   if (!token || !character.instagramUserId) {
     // Demo modu: gerçekten paylaşmadan "paylaşıldı" sayar.
     return { ok: true, externalId: `demo-${post.id}`, demo: true };
@@ -64,6 +65,6 @@ export async function publishToInstagram(
 
 function absoluteUrl(url: string) {
   if (!url || /^(https?:|data:)/.test(url)) return url;
-  const base = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
+  const base = setting("PUBLIC_BASE_URL").replace(/\/$/, "");
   return base ? `${base}${url}` : "";
 }

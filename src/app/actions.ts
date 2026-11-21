@@ -9,10 +9,13 @@ import { db, schema } from "@/lib/db";
 
 const { characters, posts } = schema;
 import { AUTH_COOKIE, authToken, isValidToken } from "@/lib/auth";
+import { ensureSettings, saveSetting, SETTING_KEYS, type SettingKey } from "@/lib/config";
 import { publishPost } from "@/lib/publish/run";
 import { refreshTraining, startTraining } from "@/lib/ai/training";
+import { runRoutine } from "@/lib/routines";
 
 async function requireAuth() {
+  await ensureSettings();
   const jar = await cookies();
   if (!(await isValidToken(jar.get(AUTH_COOKIE)?.value))) throw new Error("Yetkisiz");
 }
@@ -271,4 +274,106 @@ export async function reelToPost(reelId: string, formData: FormData) {
   });
   revalidatePath("/panel", "layout");
   redirect(`/panel/karakter/${reel.characterId}`);
+}
+
+// ---------- Ayarlar / anahtarlar ----------
+
+export async function saveSettingAction(key: SettingKey, formData: FormData) {
+  await requireAuth();
+  if (!(SETTING_KEYS as readonly string[]).includes(key)) throw new Error("Bilinmeyen ayar");
+  const value = String(formData.get("value") ?? "");
+  // Boş gönderilirse mevcut değer korunur; "sil" kutusu işaretliyse silinir
+  if (formData.get("clear") === "1") await saveSetting(key, "");
+  else if (value.trim()) await saveSetting(key, value);
+  revalidatePath("/panel", "layout");
+}
+
+export async function linkInstagramAccount(characterId: string, igUserId: string) {
+  await requireAuth();
+  await db.update(characters).set({ instagramUserId: igUserId }).where(eq(characters.id, characterId));
+  revalidatePath("/panel/ayarlar");
+}
+
+// ---------- Günlük işler ----------
+
+const routineSchema = z.object({
+  name: z.string().trim().min(1, "İsim gerekli"),
+  type: z.enum(["reels", "montage", "photo"]),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  publishMode: z.enum(["draft", "schedule"]),
+  publishTime: z.string().regex(/^\d{2}:\d{2}$/),
+  topics: z.string().default(""),
+});
+
+export async function saveRoutine(characterId: string, routineId: string | null, formData: FormData) {
+  await requireAuth();
+  const data = routineSchema.parse(Object.fromEntries(formData));
+  const days = formData
+    .getAll("days")
+    .map(Number)
+    .filter((d) => d >= 0 && d <= 6);
+  const values = { ...data, days: days.length ? days : [0, 1, 2, 3, 4, 5, 6] };
+  if (routineId) {
+    await db.update(schema.routines).set(values).where(eq(schema.routines.id, routineId));
+  } else {
+    await db.insert(schema.routines).values({ ...values, characterId });
+  }
+  revalidatePath(`/panel/karakter/${characterId}/gunluk`);
+}
+
+export async function toggleRoutine(characterId: string, routineId: string, enabled: boolean) {
+  await requireAuth();
+  await db.update(schema.routines).set({ enabled }).where(eq(schema.routines.id, routineId));
+  revalidatePath(`/panel/karakter/${characterId}/gunluk`);
+}
+
+export async function deleteRoutine(characterId: string, routineId: string) {
+  await requireAuth();
+  await db.delete(schema.routineRuns).where(eq(schema.routineRuns.routineId, routineId));
+  await db.delete(schema.routines).where(eq(schema.routines.id, routineId));
+  revalidatePath(`/panel/karakter/${characterId}/gunluk`);
+}
+
+export async function runRoutineNow(characterId: string, routineId: string) {
+  await requireAuth();
+  await runRoutine(routineId);
+  revalidatePath(`/panel/karakter/${characterId}/gunluk`);
+  revalidatePath("/panel", "layout");
+}
+
+/** Hazır örnek rutinler: tek tıkla başlangıç planı. */
+export async function addStarterRoutines(characterId: string) {
+  await requireAuth();
+  await db.insert(schema.routines).values([
+    {
+      characterId,
+      name: "Günlük fotoğraf gönderisi",
+      type: "photo",
+      time: "09:00",
+      publishMode: "draft",
+      publishTime: "12:30",
+      topics: "sabah kahvesi ve günün kombini\nİstanbul'da bir köşe\ngüzellik rutini\nhafta sonu planı\nkitap ve kahve",
+    },
+    {
+      characterId,
+      name: "Akşam fotoğraf montajı",
+      type: "montage",
+      days: [1, 3, 5],
+      time: "15:00",
+      publishMode: "draft",
+      publishTime: "19:30",
+      topics: "Luna ile bir gün\nkış kombinlerim\nİstanbul'da hafta sonu\nen sevdiğim mekanlar",
+    },
+    {
+      characterId,
+      name: "Konuşan Reels",
+      type: "reels",
+      days: [2, 6],
+      time: "11:00",
+      publishMode: "draft",
+      publishTime: "20:00",
+      topics: "Karaköy'de sabah kahvesi\ncilt bakım rutinim\nbu haftanın favori parçası\nsizden gelen sorular",
+    },
+  ]);
+  revalidatePath(`/panel/karakter/${characterId}/gunluk`);
 }

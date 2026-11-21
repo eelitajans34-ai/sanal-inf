@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import type { Character, Reel, ReelShot } from "@/db/schema";
 import { askJson, textAiEnabled } from "@/lib/ai/text";
@@ -111,7 +111,12 @@ function demoPlan(c: Character, topic: string): ReelPlan {
 
 // ---------- 2) Klipleri üret ----------
 
-export async function createReel(characterId: string, topic: string, plan: ReelPlan) {
+export async function createReel(
+  characterId: string,
+  topic: string,
+  plan: ReelPlan,
+  extra: Partial<Pick<Reel, "routineId" | "publishMode" | "publishAt">> = {}
+) {
   const keys = new Set((await listTemplates(characterId)).map((t) => t.key));
   const p = sanitizePlan(plan, keys);
   if (p.shots.length === 0) throw new Error("Senaryoda sahne yok");
@@ -126,6 +131,7 @@ export async function createReel(characterId: string, topic: string, plan: ReelP
       hashtags: p.hashtags,
       shots: p.shots,
       status: "generating",
+      ...extra,
     })
     .returning();
   const templates = new Map((await listTemplates(characterId)).map((t) => [t.key, t]));
@@ -236,7 +242,13 @@ export async function renderReel(reelId: string): Promise<Reel> {
   if (list.length === 0 || list.some((c) => c.status !== "succeeded")) {
     throw new Error("Tüm klipler hazır olmadan birleştirilemez");
   }
-  await db.update(reels).set({ status: "rendering", error: "" }).where(eq(reels.id, reelId));
+  // Aynı anda iki birleştirme olmasın: yalnızca "generating" veya "failed" durumundan başlatılır
+  const [locked] = await db
+    .update(reels)
+    .set({ status: "rendering", error: "" })
+    .where(and(eq(reels.id, reelId), inArray(reels.status, ["generating", "failed"])))
+    .returning();
+  if (!locked) return reel;
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "reel-"));
   try {

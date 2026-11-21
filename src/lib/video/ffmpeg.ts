@@ -28,7 +28,7 @@ export function ffmpeg(args: string[], timeoutMs = 300_000): Promise<string> {
     proc.on("close", (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(err);
-      else reject(new Error(`ffmpeg hata kodu ${code}: ${err.split("\n").slice(-8).join("\n")}`));
+      else reject(new Error(`ffmpeg hata kodu ${code}: ${err.split("\n").slice(-40).join("\n")}`));
     });
   });
 }

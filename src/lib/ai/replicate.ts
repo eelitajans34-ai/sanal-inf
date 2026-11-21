@@ -2,10 +2,12 @@
 // REPLICATE_API_BASE yalnızca test için değiştirilir.
 const BASE = () => (process.env.REPLICATE_API_BASE || "https://api.replicate.com/v1").replace(/\/$/, "");
 
-export const replicateEnabled = () => Boolean(process.env.REPLICATE_API_TOKEN);
+import { setting } from "@/lib/config";
+
+export const replicateEnabled = () => Boolean(setting("REPLICATE_API_TOKEN"));
 
 function headers(extra: Record<string, string> = {}) {
-  return { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`, ...extra };
+  return { Authorization: `Bearer ${setting("REPLICATE_API_TOKEN")}`, ...extra };
 }
 
 export async function rget<T = unknown>(path: string): Promise<T> {

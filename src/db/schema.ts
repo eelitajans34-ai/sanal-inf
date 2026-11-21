@@ -102,6 +102,52 @@ export const sceneTemplates = sqliteTable(
   (t) => [uniqueIndex("scene_templates_char_key").on(t.characterId, t.key)]
 );
 
+/** Panelden girilen ayarlar ve API anahtarları (.env değerlerinin önüne geçer) */
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
+  updatedAt: ts("updated_at").notNull().default(now()).$onUpdate(() => new Date()),
+});
+
+/** Fotoğraf montajı karesi */
+export type MontageSlide = { imageUrl: string; text: string; motion?: string };
+
+/** Günlük işler: belirlenen gün/saatte otomatik içerik üretimi */
+export type RoutineType = "reels" | "montage" | "photo";
+export const routines = sqliteTable("routines", {
+  id: id(),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").$type<RoutineType>().notNull(),
+  days: text("days", { mode: "json" }).$type<number[]>().notNull().default([0, 1, 2, 3, 4, 5, 6]), // 0 = Pazar
+  time: text("time").notNull().default("09:00"), // üretim saati (İstanbul)
+  topics: text("topics").notNull().default(""), // satır satır konu listesi; sırayla kullanılır
+  topicIndex: integer("topic_index").notNull().default(0),
+  publishMode: text("publish_mode").$type<"draft" | "schedule">().notNull().default("draft"),
+  publishTime: text("publish_time").notNull().default("19:00"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastRunDate: text("last_run_date").notNull().default(""),
+  lastStatus: text("last_status").notNull().default(""),
+  lastMessage: text("last_message").notNull().default(""),
+  createdAt: ts("created_at").notNull().default(now()),
+});
+
+export const routineRuns = sqliteTable("routine_runs", {
+  id: id(),
+  routineId: text("routine_id")
+    .notNull()
+    .references(() => routines.id, { onDelete: "cascade" }),
+  date: text("date").notNull(),
+  topic: text("topic").notNull().default(""),
+  status: text("status").notNull(), // started | done | failed
+  message: text("message").notNull().default(""),
+  reelId: text("reel_id"),
+  postId: text("post_id"),
+  createdAt: ts("created_at").notNull().default(now()),
+});
+
 /** Reels senaryosu ve birleştirilmiş video */
 export type ReelShot = {
   kind: "talk" | "action";
@@ -121,7 +167,14 @@ export const reels = sqliteTable("reels", {
   hook: text("hook").notNull().default(""), // ilk saniyelerde ekranda yazı
   caption: text("caption").notNull().default(""),
   hashtags: text("hashtags").notNull().default(""),
+  kind: text("kind").$type<"ai" | "montage">().notNull().default("ai"),
   shots: text("shots", { mode: "json" }).$type<ReelShot[]>().notNull().default([]),
+  slides: text("slides", { mode: "json" }).$type<MontageSlide[]>().notNull().default([]),
+  // Hazır olunca otomatik gönderi oluşturma (günlük işler)
+  routineId: text("routine_id"),
+  publishMode: text("publish_mode").notNull().default("none"), // none | draft | schedule
+  publishAt: ts("publish_at"),
+  postId: text("post_id"),
   // draft | generating | rendering | ready | failed
   status: text("status").notNull().default("draft"),
   videoUrl: text("video_url").notNull().default(""),
@@ -178,3 +231,5 @@ export type TrainingImage = typeof trainingImages.$inferSelect;
 export type Reel = typeof reels.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
 export type SceneTemplate = typeof sceneTemplates.$inferSelect;
+export type Routine = typeof routines.$inferSelect;
+export type RoutineRun = typeof routineRuns.$inferSelect;

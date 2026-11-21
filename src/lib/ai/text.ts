@@ -3,7 +3,9 @@ import type { Character } from "@/db/schema";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
-export const textAiEnabled = () => Boolean(process.env.ANTHROPIC_API_KEY);
+import { setting } from "@/lib/config";
+
+export const textAiEnabled = () => Boolean(setting("ANTHROPIC_API_KEY"));
 
 function systemPrompt(c: Character) {
   return `Sen "${c.name}" adlı sanal bir influencer'ın içerik yazarısın. ${c.name} adına, onun ağzından yazarsın.
@@ -23,7 +25,7 @@ Her zaman karakterin sesini koru. Yalnızca istenen formatta yanıt ver.`;
 const MIN_TOKENS = 4000;
 
 async function ask(c: Character, prompt: string, maxTokens = MIN_TOKENS) {
-  const client = new Anthropic();
+  const client = new Anthropic({ apiKey: setting("ANTHROPIC_API_KEY") });
   let limit = Math.max(maxTokens, MIN_TOKENS);
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await client.messages.create({

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { ensureSettings } from "@/lib/config";
 import {
   deleteTrainingImage,
   refreshTrainingAction,
@@ -31,6 +32,7 @@ const TRAINING_LABEL: Record<string, { label: string; cls: string }> = {
 
 export default async function FacePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await ensureSettings();
   const c = await db.query.characters.findFirst({ where: eq(schema.characters.id, id) });
   if (!c) notFound();
 

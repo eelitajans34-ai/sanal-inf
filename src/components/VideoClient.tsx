@@ -521,3 +521,172 @@ export function ReelBuilder({
     </div>
   );
 }
+
+// ---------- Fotoğraf montajı ----------
+
+type Slide = { imageUrl: string; text: string; motion?: string };
+type MontagePlanT = { title: string; hook: string; caption: string; hashtags: string; slides: Slide[] };
+const MOTION_LABEL: Record<string, string> = {
+  in: "Yakınlaş",
+  out: "Uzaklaş",
+  panup: "Yukarı kay",
+  panleft: "Sola kay",
+  panright: "Sağa kay",
+};
+
+export function MontageBuilder({ characterId, photos }: { characterId: string; photos: TemplateOpt[] }) {
+  const router = useRouter();
+  const [topic, setTopic] = useState("");
+  const [plan, setPlan] = useState<MontagePlanT | null>(null);
+  const [busy, setBusy] = useState<"" | "plan" | "render">("");
+  const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const update = (i: number, patch: Partial<Slide>) =>
+    setPlan((p) => (p ? { ...p, slides: p.slides.map((s, j) => (j === i ? { ...s, ...patch } : s)) } : p));
+  const move = (i: number, d: number) =>
+    setPlan((p) => {
+      if (!p) return p;
+      const s = [...p.slides];
+      const j = i + d;
+      if (j < 0 || j >= s.length) return p;
+      [s[i], s[j]] = [s[j], s[i]];
+      return { ...p, slides: s };
+    });
+
+  return (
+    <div className="card space-y-5 p-6">
+      <div>
+        <h2 className="font-display text-2xl">Fotoğraf montajı</h2>
+        <p className="text-sm text-muted">
+          Hazır fotoğraflardan zoom, kaydırma ve geçişli hareketli Reels. Replicate gerektirmez, 1 dakikadan kısa sürede
+          hazır olur.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="input flex-1"
+          placeholder="Konu: ör. Luna ile bir gün, kış kombinlerim, İstanbul'da hafta sonu…"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+        />
+        <button
+          className="btn-ghost"
+          disabled={!!busy}
+          onClick={async () => {
+            setBusy("plan");
+            setError("");
+            try {
+              setPlan(await post<MontagePlanT>("/api/video/montage/plan", { characterId, topic }));
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            } finally {
+              setBusy("");
+            }
+          }}
+        >
+          {busy === "plan" ? "Planlanıyor…" : plan ? "Yeniden planla" : "Montaj planla"}
+        </button>
+      </div>
+
+      {plan && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <span className="label">Başlık</span>
+              <input className="input" value={plan.title} onChange={(e) => setPlan({ ...plan, title: e.target.value })} />
+            </div>
+            <div>
+              <span className="label">Üstte sabit yazı</span>
+              <input className="input" value={plan.hook} onChange={(e) => setPlan({ ...plan, hook: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2">
+            {plan.slides.map((s, i) => (
+              <div key={i} className="w-36 shrink-0 space-y-1 rounded-xl border border-line p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.imageUrl} alt="" className="aspect-[9/16] w-full rounded-lg object-cover" />
+                <input className="input px-2 py-1 text-xs" value={s.text} onChange={(e) => update(i, { text: e.target.value })} />
+                <select
+                  className="input px-2 py-1 text-xs"
+                  value={s.motion || "in"}
+                  onChange={(e) => update(i, { motion: e.target.value })}
+                >
+                  {Object.entries(MOTION_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex justify-between text-xs">
+                  <button onClick={() => move(i, -1)} disabled={i === 0}>
+                    ←
+                  </button>
+                  <button
+                    className="text-red-600"
+                    onClick={() => setPlan({ ...plan, slides: plan.slides.filter((_, j) => j !== i) })}
+                  >
+                    Çıkar
+                  </button>
+                  <button onClick={() => move(i, 1)} disabled={i === plan.slides.length - 1}>
+                    →
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              className="flex w-24 shrink-0 items-center justify-center rounded-xl border border-dashed border-line text-sm text-brand"
+              onClick={() => setAdding(!adding)}
+            >
+              + Fotoğraf
+            </button>
+          </div>
+          {adding && (
+            <div className="flex gap-2 overflow-x-auto rounded-xl bg-paper p-2">
+              {photos.map((t) => (
+                <button
+                  key={t.key}
+                  title={t.title}
+                  className="h-28 w-16 shrink-0 overflow-hidden rounded-lg"
+                  onClick={() => {
+                    setPlan({ ...plan, slides: [...plan.slides, { imageUrl: t.frameUrl, text: t.title, motion: "in" }] });
+                    setAdding(false);
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={t.frameUrl} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+          <div>
+            <span className="label">Gönderi metni</span>
+            <textarea className="input" rows={3} value={plan.caption} onChange={(e) => setPlan({ ...plan, caption: e.target.value })} />
+            <input className="input mt-2" value={plan.hashtags} onChange={(e) => setPlan({ ...plan, hashtags: e.target.value })} />
+          </div>
+          <button
+            className="btn-primary"
+            disabled={!!busy || plan.slides.length < 2}
+            onClick={async () => {
+              setBusy("render");
+              setError("");
+              try {
+                await post("/api/video/montage", { characterId, topic, plan });
+                setPlan(null);
+                setTopic("");
+                router.refresh();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+              } finally {
+                setBusy("");
+              }
+            }}
+          >
+            {busy === "render" ? "Video hazırlanıyor (≈ 30-60 sn)…" : `🎞 Montajı oluştur (${plan.slides.length} fotoğraf)`}
+          </button>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { ensureSettings } from "@/lib/config";
 import { listTemplates, templateOption } from "@/lib/video/templates";
 import { deleteClipAction, rateClipAction, saveVoice } from "@/app/actions";
 import { CATEGORY_LABEL, PRESETS, presetById } from "@/lib/video/presets";
@@ -23,6 +24,7 @@ const STATUS: Record<string, string> = {
 
 export default async function VideoLabPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await ensureSettings();
   const c = await db.query.characters.findFirst({ where: eq(schema.characters.id, id) });
   if (!c) notFound();
   const templates = (await listTemplates(c.id)).map(templateOption);

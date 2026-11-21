@@ -47,6 +47,9 @@ export default async function CharacterDetail({ params }: { params: Promise<{ id
           <Link href={`/panel/karakter/${c.id}/reels`} className="btn-primary">
             🎬 Reels
           </Link>
+          <Link href={`/panel/karakter/${c.id}/gunluk`} className="btn-ghost">
+            🗓 Günlük işler
+          </Link>
           <Link href={`/panel/karakter/${c.id}/video`} className="btn-ghost">
             Ses ve hareket
           </Link>
