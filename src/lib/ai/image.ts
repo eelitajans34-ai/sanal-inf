@@ -1,6 +1,6 @@
 import type { Character } from "@/db/schema";
 import { replicateEnabled, runPrediction } from "./replicate";
-import { toDataUrl } from "@/lib/media";
+import { replicateInput } from "./inputs";
 
 // Görsel üretim stratejisi (en tutarlıdan en serbeste):
 //  1. LoRA  — karakter için eğitilmiş model varsa (en iyi yüz tutarlılığı)
@@ -28,9 +28,10 @@ export const IMAGE_MODE_LABEL: Record<ImageMode, string> = {
 export async function generateImage(
   c: Character,
   scene: string,
-  opts: { mode?: ImageMode } = {}
+  opts: { mode?: ImageMode; aspect?: "4:5" | "9:16" } = {}
 ): Promise<string> {
   const mode = opts.mode ?? imageMode(c);
+  const aspect = opts.aspect ?? "4:5";
   if (!imageAiEnabled()) return demoImage(c, scene, mode);
 
   if (mode === "lora") {
@@ -39,7 +40,7 @@ export async function generateImage(
       version,
       input: {
         prompt: `photo of ${c.loraTrigger} woman, ${scene}. Photorealistic Instagram influencer photo, natural skin texture, high detail.`,
-        aspect_ratio: "4:5",
+        aspect_ratio: aspect,
         output_format: "jpg",
         num_outputs: 1,
         lora_scale: 1,
@@ -55,8 +56,8 @@ export async function generateImage(
     return runPrediction(`/models/${KONTEXT_MODEL}/predictions`, {
       input: {
         prompt: `Keep the exact same woman from the reference photo: identical face, facial features, eye color, skin tone and long wavy hair. New photo of her: ${scene}. Change the background, outfit and pose to fit the scene. Photorealistic Instagram influencer photo, natural light, high detail.`,
-        input_image: await toDataUrl(ref),
-        aspect_ratio: "4:5",
+        input_image: await replicateInput(ref),
+        aspect_ratio: aspect,
         output_format: "jpg",
         safety_tolerance: 2,
       },
@@ -65,8 +66,8 @@ export async function generateImage(
 
   return runPrediction(`/models/${TEXT_MODEL}/predictions`, {
     input: {
-      prompt: `Photorealistic Instagram influencer photo of a woman: ${c.appearance}. Scene: ${scene}. High detail, natural skin texture, 4:5 portrait composition.`,
-      aspect_ratio: "4:5",
+      prompt: `Photorealistic Instagram influencer photo of a woman: ${c.appearance}. Scene: ${scene}. High detail, natural skin texture, vertical portrait composition.`,
+      aspect_ratio: aspect,
       output_format: "jpg",
       safety_tolerance: 2,
     },

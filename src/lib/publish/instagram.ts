@@ -17,19 +17,37 @@ export async function publishToInstagram(
     return { ok: true, externalId: `demo-${post.id}`, demo: true };
   }
 
-  const imageUrl = absoluteUrl(post.imageUrl);
-  if (!imageUrl || imageUrl.startsWith("data:")) {
-    return { ok: false, error: "Instagram için herkese açık bir görsel URL'si gerekli" };
+  const isReel = Boolean(post.videoUrl);
+  const mediaUrl = absoluteUrl(isReel ? post.videoUrl : post.imageUrl);
+  if (!mediaUrl || mediaUrl.startsWith("data:")) {
+    return { ok: false, error: "Instagram için herkese açık bir görsel/video URL'si gerekli (PUBLIC_BASE_URL)" };
   }
 
   const caption = [post.caption, post.hashtags].filter(Boolean).join("\n\n");
   try {
+    const body = isReel
+      ? { media_type: "REELS", video_url: mediaUrl, caption, share_to_feed: true, access_token: token }
+      : { image_url: mediaUrl, caption, access_token: token };
     const create = await fetch(`${GRAPH}/${character.instagramUserId}/media`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_url: imageUrl, caption, access_token: token }),
+      body: JSON.stringify(body),
     }).then((r) => r.json());
     if (!create.id) return { ok: false, error: create.error?.message || "Medya oluşturulamadı" };
+
+    // Videolar Instagram tarafında işlenir; hazır olana kadar bekle
+    if (isReel) {
+      const deadline = Date.now() + 240_000;
+      for (;;) {
+        const st = await fetch(`${GRAPH}/${create.id}?fields=status_code&access_token=${token}`).then((r) => r.json());
+        if (st.status_code === "FINISHED") break;
+        if (st.status_code === "ERROR" || st.status_code === "EXPIRED") {
+          return { ok: false, error: `Instagram video işleme hatası (${st.status_code})` };
+        }
+        if (Date.now() > deadline) return { ok: false, error: "Instagram video işleme zaman aşımı" };
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    }
 
     const pub = await fetch(`${GRAPH}/${character.instagramUserId}/media_publish`, {
       method: "POST",

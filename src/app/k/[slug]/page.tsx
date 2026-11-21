@@ -75,9 +75,19 @@ export default async function CharacterPage({ params }: Props) {
           <div className="grid items-start gap-6 sm:grid-cols-2">
             {c.posts.map((p) => (
               <article key={p.id} className="card overflow-hidden">
-                {p.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.imageUrl} alt="" className="aspect-[4/5] w-full object-cover" />
+                {p.videoUrl ? (
+                  <video
+                    src={p.videoUrl}
+                    poster={p.imageUrl || undefined}
+                    controls
+                    playsInline
+                    className="aspect-[9/16] w-full bg-ink object-cover"
+                  />
+                ) : (
+                  p.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imageUrl} alt="" className="aspect-[4/5] w-full object-cover" />
+                  )
                 )}
                 <div className="p-5">
                   <p className="text-sm whitespace-pre-line">{p.caption}</p>

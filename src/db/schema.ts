@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -27,6 +27,11 @@ export const characters = sqliteTable("characters", {
   trainingId: text("training_id").notNull().default(""),
   trainingStatus: text("training_status").notNull().default(""), // starting|processing|succeeded|failed|canceled
   trainingError: text("training_error").notNull().default(""),
+  // Ses kimliği (MiniMax Speech): her videoda aynı ses
+  voiceId: text("voice_id").notNull().default("Lively_Girl"),
+  voiceSpeed: real("voice_speed").notNull().default(1),
+  voicePitch: integer("voice_pitch").notNull().default(0),
+  voiceEmotion: text("voice_emotion").notNull().default("happy"),
   createdAt: ts("created_at").notNull().default(now()),
   updatedAt: ts("updated_at").notNull().default(now()).$onUpdate(() => new Date()),
 });
@@ -57,6 +62,7 @@ export const posts = sqliteTable(
     hashtags: text("hashtags").notNull().default(""),
     imagePrompt: text("image_prompt").notNull().default(""),
     imageUrl: text("image_url").notNull().default(""),
+    videoUrl: text("video_url").notNull().default(""), // doluysa Reels olarak paylaşılır
     platform: text("platform").notNull().default("instagram"),
     status: text("status").$type<PostStatus>().notNull().default("DRAFT"),
     scheduledAt: ts("scheduled_at"),
@@ -67,6 +73,63 @@ export const posts = sqliteTable(
     updatedAt: ts("updated_at").notNull().default(now()).$onUpdate(() => new Date()),
   },
   (t) => [index("posts_status_scheduled_idx").on(t.status, t.scheduledAt)]
+);
+
+/** Reels senaryosu ve birleştirilmiş video */
+export type ReelShot = {
+  kind: "talk" | "action";
+  presetId: string;
+  scene: string; // görsel/sahne tarifi (İngilizce)
+  line: string; // konuşma repliği (Türkçe, sadece talk)
+};
+
+export const reels = sqliteTable("reels", {
+  id: id(),
+  characterId: text("character_id")
+    .notNull()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  topic: text("topic").notNull().default(""),
+  title: text("title").notNull().default(""),
+  hook: text("hook").notNull().default(""), // ilk saniyelerde ekranda yazı
+  caption: text("caption").notNull().default(""),
+  hashtags: text("hashtags").notNull().default(""),
+  shots: text("shots", { mode: "json" }).$type<ReelShot[]>().notNull().default([]),
+  // draft | generating | rendering | ready | failed
+  status: text("status").notNull().default("draft"),
+  videoUrl: text("video_url").notNull().default(""),
+  coverUrl: text("cover_url").notNull().default(""),
+  error: text("error").notNull().default(""),
+  createdAt: ts("created_at").notNull().default(now()),
+});
+
+/** Tek bir video klip üretimi (hareket testi veya reels sahnesi) */
+export const clips = sqliteTable(
+  "clips",
+  {
+    id: id(),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    reelId: text("reel_id"),
+    shotIndex: integer("shot_index"),
+    kind: text("kind").$type<"talk" | "action">().notNull(),
+    presetId: text("preset_id").notNull(),
+    engine: text("engine").notNull(),
+    scene: text("scene").notNull().default(""),
+    line: text("line").notNull().default(""),
+    startImageUrl: text("start_image_url").notNull().default(""),
+    audioUrl: text("audio_url").notNull().default(""),
+    prompt: text("prompt").notNull().default(""),
+    predictionId: text("prediction_id").notNull().default(""),
+    // preparing | starting | running | succeeded | failed
+    status: text("status").notNull().default("preparing"),
+    videoUrl: text("video_url").notNull().default(""),
+    error: text("error").notNull().default(""),
+    rating: integer("rating").notNull().default(0), // -1, 0, 1
+    createdAt: ts("created_at").notNull().default(now()),
+    updatedAt: ts("updated_at").notNull().default(now()).$onUpdate(() => new Date()),
+  },
+  (t) => [index("clips_reel_idx").on(t.reelId), index("clips_char_preset_idx").on(t.characterId, t.presetId)]
 );
 
 export const charactersRelations = relations(characters, ({ many }) => ({
@@ -83,3 +146,6 @@ export const postsRelations = relations(posts, ({ one }) => ({
 export type Character = typeof characters.$inferSelect;
 export type Post = typeof posts.$inferSelect;
 export type TrainingImage = typeof trainingImages.$inferSelect;
+
+export type Reel = typeof reels.$inferSelect;
+export type Clip = typeof clips.$inferSelect;

@@ -24,6 +24,7 @@ export default function PostRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className={`badge ${s.cls}`}>{s.label}</span>
+          {post.videoUrl && <span className="badge bg-brand-soft text-brand">Reels</span>}
           {character && <span className="font-semibold">{character.name}</span>}
           <span className="text-muted">{fmtDateTime(when)}</span>
           {post.externalId.startsWith("demo-") && <span className="text-muted">(demo)</span>}

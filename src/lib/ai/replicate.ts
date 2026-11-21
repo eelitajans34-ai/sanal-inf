@@ -57,6 +57,26 @@ export async function runPrediction(
   return out;
 }
 
+export type PredictionState = { id: string; status: string; output: unknown; error?: string | null };
+
+/** Uzun süren işler (video) için tahmini beklemeden başlatır. */
+export async function startPrediction(
+  path: "/predictions" | `/models/${string}/predictions`,
+  body: Record<string, unknown>
+): Promise<PredictionState> {
+  return rpost<PredictionState>(path, body);
+}
+
+export async function getPrediction(id: string): Promise<PredictionState> {
+  return rget<PredictionState>(`/predictions/${id}`);
+}
+
+export function predictionOutputUrl(p: PredictionState): string {
+  const out = Array.isArray(p.output) ? p.output[0] : p.output;
+  if (typeof out !== "string") throw new Error("Beklenmeyen çıktı");
+  return out;
+}
+
 /** Dosyayı Replicate'e yükler, eğitim girdisi olarak kullanılabilecek URL döner. */
 export async function uploadFile(bytes: Uint8Array, filename: string, type: string): Promise<string> {
   const form = new FormData();

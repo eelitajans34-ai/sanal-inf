@@ -12,6 +12,8 @@ Yapay zekâ ile sanal influencer karakterleri oluştur, onların ağzından içe
 | Panel | `/panel` | Karakter listesi, yeni karakter, karakter ayarları |
 | İçerik stüdyosu | `/panel/karakter/[id]` | Fikir üret → caption yaz → görsel üret → planla / paylaş |
 | Yüz tutarlılığı | `/panel/karakter/[id]/yuz` | Referans fotoğraf, eğitim seti üretimi ve LoRA eğitimi |
+| Ses ve hareket | `/panel/karakter/[id]/video` | Ses kimliği, mimik/jest/hareket kütüphanesi, motor karşılaştırma ve puanlama |
+| Reels | `/panel/karakter/[id]/reels` | AI senaryo → sahne klipleri → 9:16 birleştirme + Türkçe altyazı → Instagram Reels |
 | Takvim | `/panel/takvim` | Aylık takvim, planlananlar, taslaklar ve hatalılar |
 | Otomasyon | `/api/cron/publish` | Zamanı gelen gönderileri Instagram'a paylaşır |
 
@@ -32,6 +34,32 @@ Görseller üç yöntemden biriyle üretilir. Uygulama mevcut en iyi yöntemi ot
 2. **Seç:** Yüzü farklı çıkanların seçimini kaldır veya sil. En az 10, ideal 15-18 görsel. İstersen beğendiğin bir görseli "Referans" yap.
 3. **LoRA eğitimini başlat:** Görseller açıklamalarıyla birlikte zip'lenip Replicate'e yüklenir. Hesabında `<karakter>-lora` adında özel bir model oluşturulur ve `ostris/flux-dev-lora-trainer` ile eğitim başlar (~20-30 dk, ~2-3 $).
 4. Eğitimin durumu "Durumu yenile" düğmesiyle ya da cron uç noktasıyla otomatik güncellenir. Bitince karakterin tüm yeni görselleri LoRA ile üretilir. Tetikleyici kelime otomatik atanır (ör. `LUNATOK`).
+
+## Konuşan ve hareket eden karakter (video)
+
+**Ses kimliği.** Her karakterin sabit bir sesi var (MiniMax Speech 2.6 HD, Türkçe). Ses ID'si, hız, perde ve duygu bir kez ayarlanır ve bütün videolarda aynı kalır. Hazır seslerden biri seçilebilir ya da `minimax/voice-cloning` ile klonlanan bir sesin ID'si girilebilir.
+
+**Hareket kütüphanesi** (`src/lib/video/presets.ts`): 20 hazır hareket var, her biri modellerin en doğal sonucu verdiği biçimde yazıldı. Her tarife ortak doğallık kuralları (gerçek zamanlı hız, mikro ifadeler, göz kırpma, yüz ve kimlik sabitliği, düzgün eller) ve bir negatif tarif eklenir.
+- *Konuşma:* kameraya samimi konuşma, heyecanlı anlatım, sakin konuşma, yürürken konuşma
+- *Mimik:* gülümseme, kahkaha, göz kırpma, şaşırma, düşünceli bakış, öpücük
+- *Jest:* el sallama, saç savurma, saçı kulağın arkasına atma, elle kalp, ürün gösterme
+- *Hareket:* kameraya yürüme, kombin dönüşü, kahve yudumlama, pencereden bakma, ayna selfiesi
+
+**Video motorları** (`src/lib/video/engines.ts`):
+
+| Motor | Tür | Ne için |
+|---|---|---|
+| OmniHuman 1.5 | Konuşma | Sese göre mimik ve jest; en doğal konuşma (varsayılan) |
+| Kling Avatar v2 | Konuşma | Çok iyi dudak senkronu, daha sakin beden hareketi |
+| Kling 2.5 Turbo Pro | Hareket | Akıcı hareket, tarife sadık (varsayılan) |
+| Seedance 1 Pro | Hareket | Ekonomik, 1080p |
+| Hailuo 2.3 | Hareket | Güçlü fizik (saç, kumaş) |
+
+**Stabil hale getirme.** Hareket laboratuvarında bir hareket aynı başlangıç karesinden 3 motora kadar üretilir ve sonuçlar 👍/👎 ile puanlanır. Reels'lerde her hareket için en çok beğenilen motor otomatik seçilir. Başlangıç kareleri karakterin yüzüyle (LoRA veya Kontext) ve 9:16 olarak üretilir.
+
+**Reels akışı:** Konu yazılır, Claude senaryoyu hazırlar (hook, 3-5 sahne, Türkçe replikler, gönderi metni). Senaryo düzenlenebilir. Ardından her sahne için başlangıç karesi, ses ve video üretilir. Bütün klipler hazır olunca ffmpeg ile 1080x1920 / 30 fps formatında birleştirilir; hook yazısı ve kelime kelime zamanlanmış Türkçe altyazılar videoya gömülür ve bir kapak görseli çıkarılır. Hazır video tek tıkla Instagram Reels olarak planlanabilir.
+
+Video üretimi asenkron çalışır: klipler Replicate'te başlatılır, panel açıkken birkaç saniyede bir durumları yoklanır, biten videolar indirilip saklanır. ffmpeg için `ffmpeg-static` paketi kullanılır (altyazı için libass içerir); istenirse `FFMPEG_PATH` ile sistemdeki ffmpeg gösterilebilir.
 
 ## Teknoloji
 
@@ -90,7 +118,9 @@ Instagram için gerekenler:
 
 - [ ] Görseller için kalıcı depolama (R2 / Supabase Storage)
 - [x] Referans fotoğrafla yüz tutarlılığı (FLUX Kontext) ve LoRA eğitimi
-- [ ] Reels / video üretimi
+- [x] Konuşan karakter, hareket kütüphanesi ve Reels üretimi
+- [ ] Arka plan müziği
+- [ ] Ses klonlama arayüzü
 - [ ] TikTok paylaşımı
 - [ ] Yorumlara karakter ağzından AI yanıt
 - [ ] Etkileşim istatistikleri

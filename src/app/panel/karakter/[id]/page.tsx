@@ -44,6 +44,12 @@ export default async function CharacterDetail({ params }: { params: Promise<{ id
           </p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
+          <Link href={`/panel/karakter/${c.id}/reels`} className="btn-primary">
+            🎬 Reels
+          </Link>
+          <Link href={`/panel/karakter/${c.id}/video`} className="btn-ghost">
+            Ses ve hareket
+          </Link>
           <Link href={`/panel/karakter/${c.id}/yuz`} className="btn-ghost">
             Yüz tutarlılığı · {IMAGE_MODE_LABEL[imageMode(c)]}
           </Link>

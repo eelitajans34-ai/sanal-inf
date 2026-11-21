@@ -24,7 +24,54 @@ export async function persistRemoteImage(url: string): Promise<string> {
   }
 }
 
-const MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  mp4: "video/mp4",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
+
+export const mimeFor = (file: string) => MIME[file.split(".").pop()?.toLowerCase() || ""] || "application/octet-stream";
+
+/** Yeni medya dosyası için yol ve uygulama içi adres üretir. */
+export async function newMediaFile(ext: string) {
+  await fs.mkdir(MEDIA_DIR, { recursive: true });
+  const name = `${crypto.randomUUID()}.${ext}`;
+  return { file: path.join(MEDIA_DIR, name), url: `/api/media/${name}` };
+}
+
+/** Uygulama içi /api/media/... adresini disk yoluna çevirir (yoksa null). */
+export function mediaPath(url: string) {
+  if (!url.startsWith("/api/media/")) return null;
+  return path.join(MEDIA_DIR, path.basename(url));
+}
+
+/** Uzak dosyayı (video/ses) indirip saklar. */
+export async function persistRemoteFile(url: string, ext: string): Promise<string> {
+  if (!/^https?:/.test(url)) return url;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Dosya indirilemedi (${res.status})`);
+  const { file, url: local } = await newMediaFile(ext);
+  await fs.writeFile(file, Buffer.from(await res.arrayBuffer()));
+  return local;
+}
+
+/** Her türlü medya adresini (data:, http, /api/media, /public) diskte bir dosyaya çevirir. */
+export async function ensureLocalFile(url: string, fallbackExt = "jpg"): Promise<string> {
+  const local = mediaPath(url);
+  if (local) return local;
+  if (!url.startsWith("data:") && !/^https?:/.test(url)) {
+    return path.join(process.cwd(), "public", path.normalize(url).replace(/^(\.\.[/\\])+/, ""));
+  }
+  const { bytes, type } = await loadImage(url);
+  const ext = Object.entries(MIME).find(([, m]) => m === type)?.[0] || fallbackExt;
+  const { file } = await newMediaFile(ext);
+  await fs.writeFile(file, bytes);
+  return file;
+}
 
 /** Uygulamadaki herhangi bir görsel adresinin baytlarını okur. */
 export async function loadImage(url: string): Promise<{ bytes: Buffer; type: string }> {

@@ -218,3 +218,57 @@ export async function removeLora(characterId: string) {
     .where(eq(characters.id, characterId));
   revalidatePath(facePath(characterId));
 }
+
+// ---------- Ses ve video ----------
+
+export async function saveVoice(characterId: string, formData: FormData) {
+  await requireAuth();
+  const voiceId = String(formData.get("voiceId") || "").trim() || "Lively_Girl";
+  const voiceSpeed = Math.min(2, Math.max(0.5, Number(formData.get("voiceSpeed")) || 1));
+  const voicePitch = Math.min(12, Math.max(-12, Math.round(Number(formData.get("voicePitch")) || 0)));
+  const voiceEmotion = String(formData.get("voiceEmotion") || "auto");
+  await db
+    .update(characters)
+    .set({ voiceId, voiceSpeed, voicePitch, voiceEmotion })
+    .where(eq(characters.id, characterId));
+  revalidatePath(`/panel/karakter/${characterId}/video`);
+}
+
+export async function rateClipAction(characterId: string, clipId: string, rating: -1 | 0 | 1) {
+  await requireAuth();
+  await db.update(schema.clips).set({ rating }).where(eq(schema.clips.id, clipId));
+  revalidatePath(`/panel/karakter/${characterId}/video`);
+}
+
+export async function deleteClipAction(characterId: string, clipId: string) {
+  await requireAuth();
+  await db.delete(schema.clips).where(eq(schema.clips.id, clipId));
+  revalidatePath(`/panel/karakter/${characterId}/video`);
+}
+
+export async function deleteReelAction(characterId: string, reelId: string) {
+  await requireAuth();
+  await db.delete(schema.clips).where(eq(schema.clips.reelId, reelId));
+  await db.delete(schema.reels).where(eq(schema.reels.id, reelId));
+  revalidatePath(`/panel/karakter/${characterId}/reels`);
+}
+
+/** Hazır Reels'i gönderi olarak ekler (taslak veya planlı). */
+export async function reelToPost(reelId: string, formData: FormData) {
+  await requireAuth();
+  const reel = await db.query.reels.findFirst({ where: eq(schema.reels.id, reelId) });
+  if (!reel || reel.status !== "ready") throw new Error("Reels hazır değil");
+  const when = parseIstanbulTime(String(formData.get("scheduledAt") || ""));
+  await db.insert(posts).values({
+    characterId: reel.characterId,
+    idea: `Reels: ${reel.title}`,
+    caption: reel.caption,
+    hashtags: reel.hashtags,
+    imageUrl: reel.coverUrl,
+    videoUrl: reel.videoUrl,
+    status: when ? "SCHEDULED" : "DRAFT",
+    scheduledAt: when,
+  });
+  revalidatePath("/panel", "layout");
+  redirect(`/panel/karakter/${reel.characterId}`);
+}

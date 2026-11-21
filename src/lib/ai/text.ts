@@ -39,6 +39,11 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(raw.slice(start, end + 1)) as T;
 }
 
+/** Karakterin sesiyle JSON yanıt ister. */
+export async function askJson<T>(c: Character, prompt: string, maxTokens = 1500): Promise<T> {
+  return parseJson<T>(await ask(c, prompt, maxTokens));
+}
+
 export async function generateIdeas(c: Character, count = 5, theme = ""): Promise<string[]> {
   if (!textAiEnabled()) return demoIdeas(c).slice(0, count);
   const raw = await ask(
