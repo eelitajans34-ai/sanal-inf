@@ -8,6 +8,7 @@ import { askJson, textAiEnabled } from "@/lib/ai/text";
 import { ensureLocalFile, newMediaFile } from "@/lib/media";
 import { PRESETS, presetById } from "./presets";
 import { createClip } from "./clips";
+import { listTemplates, templateFrame } from "./templates";
 import { ffmpeg, hasAudioStream, mediaDuration } from "./ffmpeg";
 
 const { reels, clips } = schema;
@@ -23,9 +24,17 @@ export type ReelPlan = {
 // ---------- 1) Senaryo ----------
 
 export async function planReel(c: Character, topic: string): Promise<ReelPlan> {
-  if (!textAiEnabled()) return demoPlan(c, topic);
+  const templates = await listTemplates(c.id);
+  const keys = new Set(templates.map((t) => t.key));
+  if (!textAiEnabled()) return sanitizePlan(demoPlan(c, topic), keys);
 
   const presetList = PRESETS.map((p) => `- ${p.id} (${p.kind}): ${p.label}`).join("\n");
+  const templateList = templates
+    .map(
+      (t) =>
+        `- ${t.key} [${t.source === "photo" ? "HAZIR FOTO" : "fikir"}, ${t.shot}${t.talkable ? ", konuşmaya uygun" : ""}]: ${t.title} — ifade: ${t.expression}; uygun hareketler: ${t.presets.join(", ")}`
+    )
+    .join("\n");
   const plan = await askJson<ReelPlan>(
     c,
     `${c.name} için 15-25 saniyelik bir Instagram Reels senaryosu yaz. Konu: "${topic || "günlük hayatından samimi bir an"}".
@@ -38,15 +47,17 @@ Kurallar:
 - "scene": sahnenin görsel tarifi, İNGİLİZCE: mekan, kıyafet, elinde ne var, ışık. Karakterin fiziksel tarifini YAZMA.
 - "presetId": aşağıdaki listeden, sahne türüyle uyumlu olanı seç:
 ${presetList}
+- "templateKey": her sahne için aşağıdaki sahne şablonlarından birini seç. ÖNCE "HAZIR FOTO" olanları tercih et (karakterin gerçek fotoğrafı, en tutarlı sonuç). "talk" sahnelerinde "konuşmaya uygun" şablon seç. Seçtiğin hareket, şablonun "uygun hareketler" listesinde olsun. Aynı Reels'te mekân bütünlüğü için mümkünse aynı/benzer mekândaki şablonları kullan. Şablon seçersen "scene" alanına şablonun sahnesini kısaca yaz.
+${templateList}
 
 JSON döndür:
-{"title": "kısa başlık", "hook": "ilk saniyelerde ekranda görünecek kısa yazı (max 6 kelime)", "caption": "gönderi metni (karakterin üslubuyla)", "hashtags": "#... (6-10 adet)", "shots": [{"kind": "talk|action", "presetId": "...", "scene": "...", "line": "..."}]}`,
-    2000
+{"title": "kısa başlık", "hook": "ilk saniyelerde ekranda görünecek kısa yazı (max 6 kelime)", "caption": "gönderi metni (karakterin üslubuyla)", "hashtags": "#... (6-10 adet)", "shots": [{"kind": "talk|action", "presetId": "...", "templateKey": "...", "scene": "...", "line": "..."}]}`,
+    2500
   );
-  return sanitizePlan(plan);
+  return sanitizePlan(plan, keys);
 }
 
-export function sanitizePlan(plan: ReelPlan): ReelPlan {
+export function sanitizePlan(plan: ReelPlan, templateKeys?: Set<string>): ReelPlan {
   const shots = (plan.shots || [])
     .map((s) => {
       const preset = presetById(s.presetId) ?? PRESETS.find((p) => p.kind === s.kind) ?? PRESETS[0];
@@ -55,6 +66,8 @@ export function sanitizePlan(plan: ReelPlan): ReelPlan {
         presetId: preset.id,
         scene: String(s.scene || "").slice(0, 600),
         line: preset.kind === "talk" ? String(s.line || "").slice(0, 300) : "",
+        templateKey:
+          s.templateKey && (!templateKeys || templateKeys.has(String(s.templateKey))) ? String(s.templateKey) : undefined,
       };
     })
     .filter((s) => s.kind === "action" || s.line)
@@ -79,17 +92,19 @@ function demoPlan(c: Character, topic: string): ReelPlan {
       {
         kind: "talk",
         presetId: "talk-excited",
-        scene: "sitting in a cozy Karaköy café, holding a latte, warm morning light",
+        templateKey: "kafe-kahvalti",
+        scene: "sitting at an outdoor café table with a latte and a croissant",
         line: `Günaydın arkadaşlar! Bugün size ${c.city}'un en tatlı kafesini gösteriyorum.`,
       },
-      { kind: "action", presetId: "sip-coffee", scene: "café table by the window, latte art, cream knit sweater", line: "" },
+      { kind: "action", presetId: "sip-coffee", templateKey: "kafe-kahvalti", scene: "café table, latte", line: "" },
       {
         kind: "talk",
         presetId: "talk-vlog",
-        scene: "same café, close-up, smiling, latte on the table",
-        line: "Kahvesi harika, ortamı çok huzurlu. Kesinlikle tavsiye ederim!",
+        templateKey: "balkon-gun-batimi",
+        scene: "balcony at sunset with a Bosphorus view, coffee",
+        line: "Akşamı da Boğaz manzarasıyla kapattım. Sizce hangisi daha güzel?",
       },
-      { kind: "action", presetId: "kiss", scene: "same café, waving goodbye mood, warm light", line: "" },
+      { kind: "action", presetId: "kiss", templateKey: "yatak-odasi-dogal", scene: "warm bedroom close-up", line: "" },
     ],
   };
 }
@@ -97,7 +112,8 @@ function demoPlan(c: Character, topic: string): ReelPlan {
 // ---------- 2) Klipleri üret ----------
 
 export async function createReel(characterId: string, topic: string, plan: ReelPlan) {
-  const p = sanitizePlan(plan);
+  const keys = new Set((await listTemplates(characterId)).map((t) => t.key));
+  const p = sanitizePlan(plan, keys);
   if (p.shots.length === 0) throw new Error("Senaryoda sahne yok");
   const [reel] = await db
     .insert(reels)
@@ -112,13 +128,16 @@ export async function createReel(characterId: string, topic: string, plan: ReelP
       status: "generating",
     })
     .returning();
+  const templates = new Map((await listTemplates(characterId)).map((t) => [t.key, t]));
   for (const [i, s] of p.shots.entries()) {
+    const t = s.templateKey ? templates.get(s.templateKey) ?? null : null;
     await createClip({
       characterId,
       kind: s.kind,
       presetId: s.presetId,
-      scene: s.scene,
+      scene: t?.scene || s.scene,
       line: s.line,
+      startImageUrl: templateFrame(t) || undefined,
       reelId: reel.id,
       shotIndex: i,
     });

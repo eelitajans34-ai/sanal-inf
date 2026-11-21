@@ -37,7 +37,7 @@ export default async function FacePage({ params }: { params: Promise<{ id: strin
   const images = await listTrainingImages(c.id);
   const reference = c.referenceImageUrl || c.avatarUrl;
   const selected = images.filter((i) => i.selected && !i.imageUrl.startsWith("data:image/svg"));
-  const total = selected.length + (reference ? 1 : 0);
+  const total = new Set([...selected.map((i) => i.imageUrl), ...(reference ? [reference] : [])]).size;
   const usedScenes = new Set(images.map((i) => i.scene));
   const remaining = DATASET_SCENES.filter((s) => !usedScenes.has(s)).length;
   const mode = imageMode(c);

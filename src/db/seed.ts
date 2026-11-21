@@ -1,7 +1,25 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import lunaTemplates from "./luna-templates.json";
 
-const { characters, posts } = schema;
+const { characters, posts, sceneTemplates, trainingImages } = schema;
+
+type TemplateSeed = {
+  id: string;
+  source: "photo" | "idea";
+  title: string;
+  scene: string;
+  shot: "close" | "medium" | "full";
+  expression: string;
+  outfit: string;
+  presets: string[];
+  talkable: boolean;
+  training: boolean;
+  imageUrl: string;
+  frameUrl: string;
+};
+
+const LUNA_REFERENCE = "/characters/luna/photos/yatak-odasi-yakin.jpg";
 
 async function main() {
   let [luna] = await db.select().from(characters).where(eq(characters.slug, "luna"));
@@ -39,7 +57,47 @@ async function main() {
       publishedAt: new Date(),
     });
   }
-  console.log("Seed tamam: Luna hazır 💜");
+  // Sahne şablonları (fotoğraflar + kolaj fikirleri): eklenir veya güncellenir
+  for (const t of lunaTemplates as TemplateSeed[]) {
+    const values = {
+      characterId: luna.id,
+      key: t.id,
+      source: t.source,
+      title: t.title,
+      scene: t.scene,
+      shot: t.shot,
+      expression: t.expression,
+      outfit: t.outfit,
+      presets: t.presets,
+      talkable: t.talkable,
+      imageUrl: t.imageUrl,
+      frameUrl: t.frameUrl,
+    };
+    await db
+      .insert(sceneTemplates)
+      .values(values)
+      .onConflictDoUpdate({ target: [sceneTemplates.characterId, sceneTemplates.key], set: values });
+  }
+
+  // Yüksek çözünürlüklü referans fotoğraf (Kontext için)
+  if (!luna.referenceImageUrl) {
+    await db.update(characters).set({ referenceImageUrl: LUNA_REFERENCE }).where(eq(characters.id, luna.id));
+  }
+
+  // LoRA eğitim seti: seçilmiş gerçek fotoğraflar (daha önce eklenmediyse)
+  for (const t of (lunaTemplates as TemplateSeed[]).filter((x) => x.source === "photo" && x.training)) {
+    const exists = await db
+      .select({ id: trainingImages.id })
+      .from(trainingImages)
+      .where(and(eq(trainingImages.characterId, luna.id), eq(trainingImages.imageUrl, t.imageUrl)))
+      .limit(1);
+    if (exists.length === 0) {
+      await db.insert(trainingImages).values({ characterId: luna.id, imageUrl: t.imageUrl, scene: t.scene, selected: true });
+    }
+  }
+
+  const n = (lunaTemplates as TemplateSeed[]).length;
+  console.log(`Seed tamam: Luna hazır 💜 (${n} sahne şablonu)`);
 }
 
 main().catch((e) => {

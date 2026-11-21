@@ -115,7 +115,51 @@ export const PRESETS: MotionPreset[] = [
     camera: "static medium close-up",
   },
 
+  {
+    id: "shy-smile",
+    label: "Utangaç gülümseme",
+    category: "mimik",
+    kind: "action",
+    motion:
+      "she glances down for a moment with a shy, sweet smile, then looks back up at the camera, bringing one hand gently near her cheek",
+    camera: "static close-up",
+  },
+  {
+    id: "pout",
+    label: "Dudak büzme (öpücük pozu)",
+    category: "mimik",
+    kind: "action",
+    motion: "she playfully purses her lips in a kiss pose toward the camera, holds it for a moment, then relaxes into a smile",
+    camera: "static selfie close-up",
+  },
+  {
+    id: "tongue-wink",
+    label: "Şakacı: göz kırpıp dil çıkarma",
+    category: "mimik",
+    kind: "action",
+    motion: "she winks and briefly sticks her tongue out playfully at the camera, then laughs naturally",
+    camera: "static selfie close-up",
+  },
+
   // --- Jest ---
+  {
+    id: "chin-rest",
+    label: "Çenesini eline yaslama",
+    category: "jest",
+    kind: "action",
+    motion:
+      "she slowly rests her chin on her hand, looks at the camera with a calm confident gaze, then a subtle smile appears",
+    camera: "static medium close-up",
+  },
+  {
+    id: "selfie-laugh",
+    label: "Selfie çekerken kahkaha",
+    category: "jest",
+    kind: "action",
+    motion:
+      "she holds the phone at arm's length taking a selfie video, laughs naturally, tilts her head and adjusts her hair slightly",
+    camera: "front smartphone camera held by her extended arm, natural slight movement",
+  },
   {
     id: "wave",
     label: "El sallama (selam)",

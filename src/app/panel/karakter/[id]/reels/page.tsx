@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { listTemplates, templateOption } from "@/lib/video/templates";
 import { deleteReelAction, reelToPost } from "@/app/actions";
 import { PRESETS, presetById } from "@/lib/video/presets";
 import { engineById } from "@/lib/video/engines";
@@ -23,6 +24,7 @@ export default async function ReelsPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const c = await db.query.characters.findFirst({ where: eq(schema.characters.id, id) });
   if (!c) notFound();
+  const templates = (await listTemplates(c.id)).map(templateOption);
 
   const reels = await db.query.reels.findMany({
     where: eq(schema.reels.characterId, c.id),
@@ -60,6 +62,7 @@ export default async function ReelsPage({ params }: { params: Promise<{ id: stri
       <ReelBuilder
         characterId={c.id}
         presets={PRESETS.map(({ id, label, category, kind }) => ({ id, label, category, kind }))}
+        templates={templates}
       />
 
       {withClips.map(({ reel, clips }) => {

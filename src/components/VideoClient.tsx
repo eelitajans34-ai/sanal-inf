@@ -102,6 +102,78 @@ export function VoiceTester({ characterId, sample }: { characterId: string; samp
 // ---------- Hareket laboratuvarı ----------
 
 type PresetOpt = { id: string; label: string; category: string; kind: "talk" | "action" };
+export type TemplateOpt = {
+  key: string;
+  source: "photo" | "idea";
+  title: string;
+  scene: string;
+  shot: string;
+  expression: string;
+  presets: string[];
+  talkable: boolean;
+  imageUrl: string;
+  frameUrl: string;
+};
+
+/** Sahne şablonu seçici: önce hareketle uyumlu olanlar. */
+function TemplatePicker({
+  templates,
+  presetId,
+  kind,
+  value,
+  onChange,
+}: {
+  templates: TemplateOpt[];
+  presetId: string;
+  kind: "talk" | "action";
+  value: string;
+  onChange: (t: TemplateOpt | null) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const fits = (t: TemplateOpt) => t.presets.includes(presetId) && (kind === "action" || t.talkable);
+  const list = [...templates]
+    .filter((t) => all || fits(t))
+    .sort((a, b) => Number(fits(b)) - Number(fits(a)) || (a.source === "photo" ? -1 : 1));
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="label mb-0">Sahne şablonu</span>
+        <label className="flex items-center gap-1 text-xs text-muted">
+          <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> tümünü göster
+        </label>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`flex h-28 w-16 shrink-0 items-center justify-center rounded-lg border text-center text-[10px] ${
+            !value ? "border-brand bg-brand-soft text-brand" : "border-line text-muted"
+          }`}
+        >
+          Yeni kare üret
+        </button>
+        {list.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            title={`${t.title} · ${t.expression}`}
+            onClick={() => onChange(t)}
+            className={`relative h-28 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${
+              value === t.key ? "border-brand" : "border-transparent"
+            }`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={t.frameUrl || t.imageUrl} alt="" className="h-full w-full object-cover" />
+            {t.source === "idea" && (
+              <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-white">fikir</span>
+            )}
+          </button>
+        ))}
+        {list.length === 0 && <p className="self-center text-xs text-muted">Bu hareket için uygun şablon yok.</p>}
+      </div>
+    </div>
+  );
+}
 type EngineOpt = { id: string; label: string; kind: "talk" | "action"; note: string; cost: string };
 
 const SCENES = [
@@ -118,6 +190,7 @@ export function MotionLab({
   engines,
   bestEngine,
   sampleLine,
+  templates,
 }: {
   characterId: string;
   presets: PresetOpt[];
@@ -125,9 +198,11 @@ export function MotionLab({
   engines: EngineOpt[];
   bestEngine: Record<string, string>;
   sampleLine: string;
+  templates: TemplateOpt[];
 }) {
   const router = useRouter();
   const [presetId, setPresetId] = useState(presets[0].id);
+  const [templateKey, setTemplateKey] = useState("");
   const preset = presets.find((p) => p.id === presetId)!;
   const kindEngines = engines.filter((e) => e.kind === preset.kind);
   const [selected, setSelected] = useState<string[]>([]);
@@ -170,6 +245,17 @@ export function MotionLab({
           </div>
         </div>
       ))}
+
+      <TemplatePicker
+        templates={templates}
+        presetId={presetId}
+        kind={preset.kind}
+        value={templateKey}
+        onChange={(t) => {
+          setTemplateKey(t?.key ?? "");
+          if (t) setScene(t.scene);
+        }}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3">
@@ -238,7 +324,14 @@ export function MotionLab({
             setBusy(true);
             setError("");
             try {
-              await post("/api/video/clips", { characterId, presetId, engines: effective, scene, line });
+              await post("/api/video/clips", {
+                characterId,
+                presetId,
+                engines: effective,
+                scene,
+                line,
+                templateKey: templateKey || undefined,
+              });
               router.refresh();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));
@@ -247,7 +340,9 @@ export function MotionLab({
             }
           }}
         >
-          {busy ? "Başlangıç karesi hazırlanıyor…" : `Üret (${effective.length} motor)`}
+          {busy
+            ? "Başlatılıyor…"
+            : `Üret (${effective.length} motor${templates.find((t) => t.key === templateKey)?.source === "photo" ? ", hazır fotoğrafla" : ""})`}
         </button>
         <span className="text-xs text-muted">Video üretimi motor başına genellikle 1-4 dakika sürer.</span>
       </div>
@@ -258,10 +353,18 @@ export function MotionLab({
 
 // ---------- Reels oluşturucu ----------
 
-type Shot = { kind: "talk" | "action"; presetId: string; scene: string; line: string };
+type Shot = { kind: "talk" | "action"; presetId: string; scene: string; line: string; templateKey?: string };
 type Plan = { title: string; hook: string; caption: string; hashtags: string; shots: Shot[] };
 
-export function ReelBuilder({ characterId, presets }: { characterId: string; presets: PresetOpt[] }) {
+export function ReelBuilder({
+  characterId,
+  presets,
+  templates,
+}: {
+  characterId: string;
+  presets: PresetOpt[];
+  templates: TemplateOpt[];
+}) {
   const router = useRouter();
   const [topic, setTopic] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -352,11 +455,18 @@ export function ReelBuilder({ characterId, presets }: { characterId: string; pre
                     onChange={(e) => setShot(i, { line: e.target.value })}
                   />
                 )}
+                <TemplatePicker
+                  templates={templates}
+                  presetId={s.presetId}
+                  kind={s.kind}
+                  value={s.templateKey || ""}
+                  onChange={(t) => setShot(i, t ? { templateKey: t.key, scene: t.scene } : { templateKey: undefined })}
+                />
                 <input
                   className="input text-xs"
                   value={s.scene}
                   onChange={(e) => setShot(i, { scene: e.target.value })}
-                  placeholder="Sahne tarifi (İngilizce)"
+                  placeholder="Sahne tarifi (İngilizce) — şablon seçilmezse bu tariften yeni kare üretilir"
                 />
               </li>
             ))}

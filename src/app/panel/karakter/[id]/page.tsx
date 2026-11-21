@@ -50,6 +50,9 @@ export default async function CharacterDetail({ params }: { params: Promise<{ id
           <Link href={`/panel/karakter/${c.id}/video`} className="btn-ghost">
             Ses ve hareket
           </Link>
+          <Link href={`/panel/karakter/${c.id}/sablonlar`} className="btn-ghost">
+            Şablonlar
+          </Link>
           <Link href={`/panel/karakter/${c.id}/yuz`} className="btn-ghost">
             Yüz tutarlılığı · {IMAGE_MODE_LABEL[imageMode(c)]}
           </Link>

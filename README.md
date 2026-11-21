@@ -35,14 +35,23 @@ Görseller üç yöntemden biriyle üretilir. Uygulama mevcut en iyi yöntemi ot
 3. **LoRA eğitimini başlat:** Görseller açıklamalarıyla birlikte zip'lenip Replicate'e yüklenir. Hesabında `<karakter>-lora` adında özel bir model oluşturulur ve `ostris/flux-dev-lora-trainer` ile eğitim başlar (~20-30 dk, ~2-3 $).
 4. Eğitimin durumu "Durumu yenile" düğmesiyle ya da cron uç noktasıyla otomatik güncellenir. Bitince karakterin tüm yeni görselleri LoRA ile üretilir. Tetikleyici kelime otomatik atanır (ör. `LUNATOK`).
 
+## Sahne şablonları (Luna'nın fotoğrafları)
+
+`public/characters/luna/` klasöründe Luna'nın **32 yüksek çözünürlüklü fotoğrafı** ve kolajdan alınan **20 senaryo fikri** var. Etiketleri `src/db/luna-templates.json` dosyasında; `npm run db:seed` hepsini veritabanına yükler.
+
+- **Hazır fotoğraflar:** her biri mekân, kıyafet, çekim açısı (yakın/orta/boy), ifade, "konuşmaya uygun" bilgisi ve uygun hareketlerle etiketli. Yüz algılamayla ortalanmış **9:16 kesimi** (`*-916.jpg`) doğrudan video başlangıç karesi olarak kullanılır. Görsel üretmeye gerek kalmaz ve kimlik tutarlılığı en yüksek seviyede olur.
+- **Senaryo fikirleri:** kolajdaki mekân ve mimikler (göz kırpma, öpücük, dil çıkarma, şaşkınlık…). Küçük önizlemeler eğitimde kullanılmaz; seçilince sahne Luna'nın yüzüyle yeniden üretilir.
+- **LoRA eğitim seti:** farklı ifadelerden seçilmiş 24 fotoğraf eğitim setine hazır olarak eklenir. Referans fotoğraf olarak yüksek çözünürlüklü `yatak-odasi-yakin.jpg` kullanılır.
+- Hareket laboratuvarında ve Reels sahnelerinde şablon seçilebilir. Claude senaryoyu yazarken de hazır fotoğrafları önceliklendirerek bu şablonlardan seçer.
+
 ## Konuşan ve hareket eden karakter (video)
 
 **Ses kimliği.** Her karakterin sabit bir sesi var (MiniMax Speech 2.6 HD, Türkçe). Ses ID'si, hız, perde ve duygu bir kez ayarlanır ve bütün videolarda aynı kalır. Hazır seslerden biri seçilebilir ya da `minimax/voice-cloning` ile klonlanan bir sesin ID'si girilebilir.
 
-**Hareket kütüphanesi** (`src/lib/video/presets.ts`): 20 hazır hareket var, her biri modellerin en doğal sonucu verdiği biçimde yazıldı. Her tarife ortak doğallık kuralları (gerçek zamanlı hız, mikro ifadeler, göz kırpma, yüz ve kimlik sabitliği, düzgün eller) ve bir negatif tarif eklenir.
+**Hareket kütüphanesi** (`src/lib/video/presets.ts`): 25 hazır hareket var, her biri modellerin en doğal sonucu verdiği biçimde yazıldı. Her tarife ortak doğallık kuralları (gerçek zamanlı hız, mikro ifadeler, göz kırpma, yüz ve kimlik sabitliği, düzgün eller) ve bir negatif tarif eklenir.
 - *Konuşma:* kameraya samimi konuşma, heyecanlı anlatım, sakin konuşma, yürürken konuşma
-- *Mimik:* gülümseme, kahkaha, göz kırpma, şaşırma, düşünceli bakış, öpücük
-- *Jest:* el sallama, saç savurma, saçı kulağın arkasına atma, elle kalp, ürün gösterme
+- *Mimik:* gülümseme, kahkaha, göz kırpma, şaşırma, düşünceli bakış, öpücük, utangaç gülümseme, dudak büzme, göz kırpıp dil çıkarma
+- *Jest:* el sallama, saç savurma, saçı kulağın arkasına atma, elle kalp, ürün gösterme, çeneyi ele yaslama, selfie çekerken kahkaha
 - *Hareket:* kameraya yürüme, kombin dönüşü, kahve yudumlama, pencereden bakma, ayna selfiesi
 
 **Video motorları** (`src/lib/video/engines.ts`):

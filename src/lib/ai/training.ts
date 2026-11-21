@@ -81,7 +81,12 @@ export async function startTraining(c: Character) {
     ...[c.referenceImageUrl || c.avatarUrl].filter(Boolean).map((url) => ({ url, scene: "portrait photo" })),
     ...selected.map((t) => ({ url: t.imageUrl, scene: t.scene })),
   ];
-  const usable = sources.filter((s) => !s.url.startsWith("data:image/svg"));
+  const seen = new Set<string>();
+  const usable = sources.filter((s) => {
+    if (s.url.startsWith("data:image/svg") || seen.has(s.url)) return false;
+    seen.add(s.url);
+    return true;
+  });
   if (usable.length < MIN_TRAINING_IMAGES) {
     throw new Error(`En az ${MIN_TRAINING_IMAGES} gerçek fotoğraf gerekli (şu an ${usable.length}).`);
   }

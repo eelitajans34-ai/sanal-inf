@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -75,12 +75,40 @@ export const posts = sqliteTable(
   (t) => [index("posts_status_scheduled_idx").on(t.status, t.scheduledAt)]
 );
 
+/**
+ * Sahne şablonları: karakterin hazır fotoğrafları (doğrudan video başlangıç karesi)
+ * ve senaryo fikirleri (başlangıç karesi LoRA/Kontext ile üretilir).
+ */
+export const sceneTemplates = sqliteTable(
+  "scene_templates",
+  {
+    id: id(),
+    characterId: text("character_id")
+      .notNull()
+      .references(() => characters.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    source: text("source").$type<"photo" | "idea">().notNull(),
+    title: text("title").notNull(),
+    scene: text("scene").notNull(), // İngilizce sahne tarifi
+    shot: text("shot").$type<"close" | "medium" | "full">().notNull().default("medium"),
+    expression: text("expression").notNull().default(""),
+    outfit: text("outfit").notNull().default(""),
+    presets: text("presets", { mode: "json" }).$type<string[]>().notNull().default([]),
+    talkable: integer("talkable", { mode: "boolean" }).notNull().default(false),
+    imageUrl: text("image_url").notNull().default(""), // önizleme / orijinal
+    frameUrl: text("frame_url").notNull().default(""), // 9:16 başlangıç karesi (sadece photo)
+    createdAt: ts("created_at").notNull().default(now()),
+  },
+  (t) => [uniqueIndex("scene_templates_char_key").on(t.characterId, t.key)]
+);
+
 /** Reels senaryosu ve birleştirilmiş video */
 export type ReelShot = {
   kind: "talk" | "action";
   presetId: string;
   scene: string; // görsel/sahne tarifi (İngilizce)
   line: string; // konuşma repliği (Türkçe, sadece talk)
+  templateKey?: string; // sahne şablonu (varsa başlangıç karesi oradan gelir)
 };
 
 export const reels = sqliteTable("reels", {
@@ -149,3 +177,4 @@ export type TrainingImage = typeof trainingImages.$inferSelect;
 
 export type Reel = typeof reels.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
+export type SceneTemplate = typeof sceneTemplates.$inferSelect;

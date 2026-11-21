@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import { listTemplates, templateOption } from "@/lib/video/templates";
 import { deleteClipAction, rateClipAction, saveVoice } from "@/app/actions";
 import { CATEGORY_LABEL, PRESETS, presetById } from "@/lib/video/presets";
 import { DEFAULT_ENGINE, ENGINES, engineById } from "@/lib/video/engines";
@@ -24,6 +25,7 @@ export default async function VideoLabPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const c = await db.query.characters.findFirst({ where: eq(schema.characters.id, id) });
   if (!c) notFound();
+  const templates = (await listTemplates(c.id)).map(templateOption);
 
   const clips = await db.query.clips.findMany({
     where: and(eq(schema.clips.characterId, c.id), isNull(schema.clips.reelId)),
@@ -148,6 +150,7 @@ export default async function VideoLabPage({ params }: { params: Promise<{ id: s
         engines={ENGINES.map(({ id, label, kind, note, cost }) => ({ id, label, kind, note, cost }))}
         bestEngine={best}
         sampleLine={sample}
+        templates={templates}
       />
 
       {/* Sonuçlar */}
